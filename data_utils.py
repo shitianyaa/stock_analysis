@@ -4,43 +4,33 @@ from datetime import datetime, timedelta
 import os
 import re
 import streamlit as st
-import time
 
-# ===================== 核心工具 =====================
+# ===================== 基础工具 =====================
 
 def get_tushare_pro():
-    """获取 Tushare Pro 接口客户端"""
     try:
-        # 优先读取 Streamlit Secrets
         if hasattr(st, 'secrets') and 'TUSHARE_TOKEN' in st.secrets:
             token = st.secrets['TUSHARE_TOKEN']
         else:
             token = os.getenv("TUSHARE_TOKEN", "")
         
-        if not token:
-            print("❌ Token未配置")
-            return None
-            
+        if not token: return None
         ts.set_token(token)
         return ts.pro_api()
-    except Exception as e:
-        print(f"❌ Token初始化失败: {e}")
-        return None
+    except: return None
 
 def validate_stock_code(code):
-    """验证并格式化代码"""
-    clean_code = re.sub(r'[^\d]', '', str(code))
-    if len(clean_code) == 5: return True, clean_code + ".HK"
-    if len(clean_code) == 6:
-        if clean_code.startswith('6'): suffix = ".SH"
-        elif clean_code.startswith(('0', '3')): suffix = ".SZ"
-        elif clean_code.startswith(('8', '4')): suffix = ".BJ"
+    clean = re.sub(r'[^\d]', '', str(code))
+    if len(clean) == 5: return True, clean + ".HK"
+    if len(clean) == 6:
+        if clean.startswith('6'): s = ".SH"
+        elif clean.startswith(('0','3')): s = ".SZ"
+        elif clean.startswith(('8','4')): s = ".BJ"
         else: return False, "未知前缀"
-        return True, clean_code + suffix
-    return False, "代码格式错误"
+        return True, clean + s
+    return False, "格式错误"
 
 def get_stock_name_by_code(ts_code):
-    """获取名称 (带缓存思想的简化版)"""
     pro = get_tushare_pro()
     if not pro: return "未连接"
     try:
@@ -50,72 +40,65 @@ def get_stock_name_by_code(ts_code):
             df = pro.stock_basic(ts_code=ts_code)
         if not df.empty: return df.iloc[0]['name']
     except: pass
-    return ts_code # 如果获取失败直接返回代码，不返回“未知”
+    return ts_code
 
 def search_stocks(keyword):
-    """搜索功能"""
     pro = get_tushare_pro()
     if not pro: return []
-    results = []
+    res = []
     try:
         # A股
-        df_a = pro.stock_basic(exchange='', list_status='L', fields='ts_code,name')
-        if not df_a.empty:
-            mask = df_a["name"].str.contains(keyword, na=False) | df_a["ts_code"].str.contains(keyword, na=False)
-            results.extend([{"代码": r['ts_code'], "名称": r['name'], "类型": "A股"} for _, r in df_a[mask].head(5).iterrows()])
+        df = pro.stock_basic(exchange='', list_status='L', fields='ts_code,name')
+        if not df.empty:
+            mask = df['name'].str.contains(keyword, na=False) | df['ts_code'].str.contains(keyword, na=False)
+            res.extend([{"代码":r['ts_code'],"名称":r['name'],"类型":"A股"} for _,r in df[mask].head(5).iterrows()])
         # 港股
         try:
             df_hk = pro.hk_basic(list_status='L', fields='ts_code,name')
             if not df_hk.empty:
-                mask_hk = df_hk["name"].str.contains(keyword, na=False) | df_hk["ts_code"].str.contains(keyword, na=False)
-                results.extend([{"代码": r['ts_code'], "名称": r['name'], "类型": "港股"} for _, r in df_hk[mask_hk].head(5).iterrows()])
+                mask = df_hk['name'].str.contains(keyword, na=False) | df_hk['ts_code'].str.contains(keyword, na=False)
+                res.extend([{"代码":r['ts_code'],"名称":r['name'],"类型":"港股"} for _,r in df_hk[mask].head(5).iterrows()])
         except: pass
-        return results[:10]
+        return res[:10]
     except: return []
 
-# ===================== 技术指标计算 =====================
+# ===================== 核心指标计算 =====================
 
 def get_enhanced_technical_indicators(df):
     try:
         if df.empty: return df
+        # 按日期升序排列，方便计算指标
         df = df.sort_values('trade_date').reset_index(drop=True)
         close = df['close']
         
-        # 均线
         df['ma5'] = close.rolling(5).mean()
         df['ma10'] = close.rolling(10).mean()
         df['ma20'] = close.rolling(20).mean()
         
-        # MACD
         exp1 = close.ewm(span=12, adjust=False).mean()
         exp2 = close.ewm(span=26, adjust=False).mean()
         df['dif'] = exp1 - exp2
         df['dea'] = df['dif'].ewm(span=9, adjust=False).mean()
         df['macd'] = (df['dif'] - df['dea']) * 2
         
-        # RSI
         delta = close.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
         
-        # 布林带
-        df['bb_middle'] = close.rolling(20).mean()
+        df['bb_mid'] = close.rolling(20).mean()
         std = close.rolling(20).std()
-        df['bb_upper'] = df['bb_middle'] + 2 * std
-        df['bb_lower'] = df['bb_middle'] - 2 * std
-        
-        # 波动率
+        df['bb_up'] = df['bb_mid'] + 2 * std
+        df['bb_low'] = df['bb_mid'] - 2 * std
         df['volatility'] = df['pct_chg'].rolling(20).std()
         
         return df
     except: return df
 
-# ===================== 核心数据获取 (强逻辑版) =====================
+# ===================== 行情获取 (修复换手率) =====================
 
 def get_clean_market_data(ts_code, days=90):
-    """获取行情 + 换手率"""
     pro = get_tushare_pro()
     if not pro: return {"错误": "Token无效"}
     
@@ -124,169 +107,134 @@ def get_clean_market_data(ts_code, days=90):
         start = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
         
         df = pd.DataFrame()
-        turnover = "N/A"
+        turnover_val = None # 专门存储换手率数值
         
-        # 1. 获取基础行情
+        # === 1. 获取基础行情 ===
         if ts_code.endswith('.HK'):
+            # 港股
             try:
                 df = pro.hk_daily(ts_code=ts_code, start_date=start, end_date=end)
-                # 尝试补全港股换手率
-                try:
-                    # 扩大范围找最近的一个指标
-                    ind_start = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
-                    df_ind = pro.hk_indicator(ts_code=ts_code, start_date=ind_start)
-                    if not df_ind.empty:
-                        last_ind = df_ind.sort_values('trade_date', ascending=False).iloc[0]
-                        if pd.notna(last_ind.get('turnover_rate')):
-                            turnover = f"{last_ind['turnover_rate']}%"
-                except: pass
+                
+                # 港股换手率必须去 hk_indicator 拿
+                # 往前查30天，直到找到有数据为止
+                ind_start = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+                df_ind = pro.hk_indicator(ts_code=ts_code, start_date=ind_start)
+                
+                if not df_ind.empty:
+                    # 倒序，取第一条非空的 turnover_rate
+                    df_ind = df_ind.sort_values('trade_date', ascending=False)
+                    for _, row in df_ind.iterrows():
+                        if pd.notna(row.get('turnover_rate')):
+                            turnover_val = row['turnover_rate']
+                            break
             except Exception as e: return {"错误": f"港股接口错: {e}"}
         else:
+            # A股
             df = pro.daily(ts_code=ts_code, start_date=start, end_date=end)
             
+            # A股换手率就在 daily 里，直接拿最新的一条（Tushare默认第一条就是最新的）
+            if not df.empty:
+                first_row = df.iloc[0]
+                if pd.notna(first_row.get('turnover_rate')):
+                    turnover_val = first_row['turnover_rate']
+        
         if df.empty: return {"错误": "暂无行情数据"}
         
-        # 2. 计算指标
+        # === 2. 格式化换手率字符串 ===
+        if turnover_val is not None:
+            turnover_str = f"{float(turnover_val):.2f}%"
+        else:
+            turnover_str = "N/A"
+
+        # === 3. 计算其他指标 ===
+        # 注意：这里会重排df顺序，所以我们上面已经把换手率提出来了
         df = get_enhanced_technical_indicators(df)
-        latest = df.iloc[-1]
-        
-        # A股换手率回填
-        if not ts_code.endswith('.HK'):
-            if pd.notna(latest.get('turnover_rate')): turnover = f"{latest['turnover_rate']}%"
+        latest = df.iloc[-1] # 这是时间最近的一行
 
         return {
             "收盘价": f"{latest['close']}",
             "涨跌幅": f"{latest['pct_chg']:.2f}%",
             "成交量": f"{latest['vol']/10000:.2f}万手",
-            "换手率": turnover,
+            "换手率": turnover_str, # 使用我们单独提取并格式化的值
             "5日均线": f"{latest['ma5']:.2f}" if pd.notna(latest['ma5']) else "-",
             "10日均线": f"{latest['ma10']:.2f}" if pd.notna(latest['ma10']) else "-",
             "20日均线": f"{latest['ma20']:.2f}" if pd.notna(latest['ma20']) else "-",
             "MACD": f"{latest['macd']:.4f}" if pd.notna(latest['macd']) else "-",
             "RSI": f"{latest['rsi']:.2f}" if pd.notna(latest['rsi']) else "-",
-            "布林上轨": f"{latest['bb_upper']:.2f}" if pd.notna(latest['bb_upper']) else "-",
-            "布林中轨": f"{latest['bb_middle']:.2f}" if pd.notna(latest['bb_middle']) else "-",
-            "布林下轨": f"{latest['bb_lower']:.2f}" if pd.notna(latest['bb_lower']) else "-",
+            "布林上轨": f"{latest['bb_up']:.2f}" if pd.notna(latest['bb_up']) else "-",
+            "布林中轨": f"{latest['bb_mid']:.2f}" if pd.notna(latest['bb_mid']) else "-",
+            "布林下轨": f"{latest['bb_low']:.2f}" if pd.notna(latest['bb_low']) else "-",
             "波动率": f"{latest['volatility']:.4f}" if pd.notna(latest['volatility']) else "-",
         }
     except Exception as e: return {"错误": str(e)}
 
+# ===================== 基本面 & 市场环境 =====================
+
 def get_clean_fundamental_data(ts_code, daily_data=None):
-    """基本面获取 (死磕版)"""
     pro = get_tushare_pro()
-    if not pro: return {"错误": "Token无效"}
-    
     pe, pb, mv, industry = "-", "-", "-", "未知"
-    
     try:
-        # === A股 ===
-        if not ts_code.endswith('.HK'):
-            # 行业
-            basic = pro.stock_basic(ts_code=ts_code, fields='name,industry')
-            if not basic.empty: industry = basic.iloc[0]['industry']
-            # 估值
+        if ts_code.endswith('.HK'):
+            # 港股
             try:
-                db = pro.daily_basic(ts_code=ts_code, trade_date=datetime.now().strftime('%Y%m%d'))
-                if db.empty: # 找不到今天找昨天
-                    db = pro.daily_basic(ts_code=ts_code, trade_date=(datetime.now() - timedelta(days=1)).strftime('%Y%m%d'))
+                b = pro.hk_basic(ts_code=ts_code)
+                if not b.empty: industry = b.iloc[0].get('industry', '港股')
+                
+                # 估值 (查60天)
+                s_date = (datetime.now() - timedelta(days=60)).strftime('%Y%m%d')
+                df_i = pro.hk_indicator(ts_code=ts_code, start_date=s_date)
+                if not df_i.empty:
+                    # 找最近一条有效数据
+                    df_i = df_i.sort_values('trade_date', ascending=False)
+                    for _, r in df_i.iterrows():
+                        if pd.notna(r.get('pe_ttm')) or pd.notna(r.get('mkt_cap')):
+                            if pd.notna(r.get('pe_ttm')): pe = f"{r['pe_ttm']:.2f}"
+                            if pd.notna(r.get('pb')): pb = f"{r['pb']:.2f}"
+                            if pd.notna(r.get('mkt_cap')): mv = f"{r['mkt_cap']/100000000:.2f}亿"
+                            break
+            except: pass
+        else:
+            # A股
+            b = pro.stock_basic(ts_code=ts_code, fields='industry')
+            if not b.empty: industry = b.iloc[0]['industry']
+            try:
+                db = pro.daily_basic(ts_code=ts_code, start_date=(datetime.now()-timedelta(days=5)).strftime('%Y%m%d'))
                 if not db.empty:
-                    r = db.iloc[0]
+                    r = db.sort_values('trade_date', ascending=False).iloc[0]
                     pe = f"{r['pe_ttm']:.2f}"
                     pb = f"{r['pb']:.2f}"
                     mv = f"{r['total_mv']/10000:.2f}亿"
             except: pass
-            
-        # === 港股 (重点修复) ===
-        else:
-            # 1. 行业：hk_basic 通常没有 industry，我们尝试获取一下，如果没有就显示"港股"
-            try:
-                basic = pro.hk_basic(ts_code=ts_code)
-                if not basic.empty:
-                    # 如果字段里真有 industry 就用，没有就算了
-                    industry = basic.iloc[0].get('industry', '港股主板')
-            except: pass
-
-            # 2. 估值：死磕 hk_indicator
-            # 循环往前找 60 天的数据！直到找到为止
-            try:
-                end = datetime.now().strftime('%Y%m%d')
-                start = (datetime.now() - timedelta(days=60)).strftime('%Y%m%d')
-                
-                # 不指定 fields，全量拉取，避免字段名写错
-                df_ind = pro.hk_indicator(ts_code=ts_code, start_date=start, end_date=end)
-                
-                if not df_ind.empty:
-                    # 按日期倒序，取第一行
-                    r = df_ind.sort_values('trade_date', ascending=False).iloc[0]
-                    
-                    # 调试：只要有数据就填进去
-                    if pd.notna(r.get('pe_ttm')): pe = f"{r['pe_ttm']:.2f}"
-                    if pd.notna(r.get('pb')): pb = f"{r['pb']:.2f}"
-                    # 港股市值字段可能是 mkt_cap
-                    if pd.notna(r.get('mkt_cap')): mv = f"{r['mkt_cap']/100000000:.2f}亿"
-                else:
-                    # 如果 hk_indicator 真的空了，返回一个提示
-                    pe = "Tushare无数据"
-            except Exception as e:
-                print(f"港股估值获取报错: {e}")
-                
-    except Exception as e:
-        return {"错误": str(e)}
-
-    return {
-        "PE(TTM)": pe,
-        "PB": pb,
-        "总市值": mv,
-        "所属行业": industry,
-        "备注": "数据来源:Tushare Pro"
-    }
+    except: pass
+    return {"PE(TTM)":pe, "PB":pb, "总市值":mv, "所属行业":industry}
 
 def get_market_environment_data(ts_code):
-    """市场环境 (强制兜底版)"""
     pro = get_tushare_pro()
-    
-    change = "0.00%"
-    sentiment = "中性"
-    index_name = "未知指数"
-    
+    change, sentiment, name = "0.00%", "中性", "未知"
     try:
         end = datetime.now().strftime('%Y%m%d')
         start = (datetime.now() - timedelta(days=10)).strftime('%Y%m%d')
         
-        df = pd.DataFrame()
-        
-        # 1. 优先尝试获取 沪深300 (399300.SZ) - 保证绝对能拿到数据
-        # 无论查什么股票，先拿一个能用的指数垫底
+        # 强制兜底：先拿沪深300
         try:
-            df_safe = pro.index_daily(ts_code='399300.SZ', start_date=start, end_date=end)
-            if not df_safe.empty:
-                r = df_safe.sort_values('trade_date', ascending=False).iloc[0]
-                change = f"{r['pct_chg']:.2f}%"
-                index_name = "沪深300(参考)"
+            df = pro.index_daily(ts_code='399300.SZ', start_date=start, end_date=end)
+            if not df.empty:
+                change = f"{df.iloc[0]['pct_chg']:.2f}%"
+                name = "沪深300"
         except: pass
 
-        # 2. 如果是港股，尝试覆盖为 恒生指数
+        # 港股尝试拿恒指
         if ts_code.endswith('.HK'):
             try:
-                # 恒指代码 HSI
-                df_hk = pro.index_daily(ts_code='HSI', start_date=start, end_date=end)
-                if not df_hk.empty:
-                    r = df_hk.sort_values('trade_date', ascending=False).iloc[0]
-                    change = f"{r['pct_chg']:.2f}%"
-                    index_name = "恒生指数"
+                df = pro.index_daily(ts_code='HSI', start_date=start, end_date=end)
+                if not df.empty:
+                    change = f"{df.iloc[0]['pct_chg']:.2f}%"
+                    name = "恒生指数"
             except: pass
         
-        # 计算情绪
-        try:
-            chg_val = float(change.replace('%', ''))
-            if chg_val > 1: sentiment = "乐观"
-            elif chg_val < -1: sentiment = "悲观"
-        except: pass
-            
+        val = float(change.replace('%',''))
+        if val > 1: sentiment = "乐观"
+        elif val < -1: sentiment = "悲观"
     except: pass
     
-    return {
-        "市场指数涨跌幅": f"{change} [{index_name}]",
-        "市场情绪": sentiment,
-        "资金流向": "暂缺"
-    }
+    return {"市场指数涨跌幅": f"{change} ({name})", "市场情绪": sentiment}
