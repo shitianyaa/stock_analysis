@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ===================== 2. 密码验证模块 (保持不变) =====================
+# ===================== 2. 密码验证模块 =====================
 def check_password():
     if st.session_state.get("password_correct", False):
         return True
@@ -57,139 +57,153 @@ def check_password():
 # ===================== 3. 主程序逻辑 =====================
 
 def run_app():
-    # === CSS 深度美化 (优化间距与排版) ===
+    # === CSS 深度美化 (高端金融风) ===
     st.markdown("""
     <style>
-        /* 全局背景与字体 */
-        .stApp {
-            background-color: #f8f9fa; /* 极淡的灰背景，护眼 */
+        /* 全局字体优化 */
+        html, body, [class*="css"] {
+            font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
         }
         
-        /* 侧边栏 */
+        /* 侧边栏样式 */
         [data-testid="stSidebar"] {
-            background-color: #ffffff;
-            border-right: 1px solid #e0e0e0;
+            background-color: #f8f9fa;
+            border-right: 1px solid #eee;
         }
         [data-testid="stSidebar"] * {
             color: #333333 !important;
         }
 
-        /* 顶部 Header */
-        .main-header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); /* 清爽蓝渐变 */
-            padding: 2.5rem 2rem;
-            border-radius: 16px;
+        /* --- 首页 (Landing Page) --- */
+        .landing-header {
+            /* 核心修改：使用深邃的金融蓝渐变，替代之前的亮青色 */
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 4rem 2rem;
+            border-radius: 20px;
             color: white;
-            margin-bottom: 2.5rem;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            text-align: center;
+            margin-bottom: 3rem;
+            box-shadow: 0 10px 30px rgba(30, 60, 114, 0.2);
         }
-        .main-header h1 {
+        .landing-header h1 {
             color: white !important;
-            font-size: 2.2rem;
+            font-size: 3rem;
             font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 1rem;
+        }
+        .landing-header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: 300;
+            color: rgba(255,255,255,0.9) !important;
+            max-width: 600px;
+            margin: 0 auto;
         }
         
-        /* 通用卡片样式 */
-        .data-card {
-            background-color: #ffffff;
-            padding: 1.5rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        /* 功能特性卡片 */
+        .feature-card {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
             border: 1px solid #f0f0f0;
-            height: 100%; /* 撑满高度 */
-            min-height: 160px; /* 最小高度，防止太挤 */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            transition: transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
+            height: 100%;
         }
-        .data-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            border-color: #e0e0e0;
+        }
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            background: #f0f4f8;
+            width: 80px;
+            height: 80px;
+            line-height: 80px;
+            border-radius: 50%;
+        }
+        .feature-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .feature-desc {
+            font-size: 0.9rem;
+            color: #666;
+            line-height: 1.6;
         }
 
-        /* 卡片内部排版 */
-        .card-header {
+        /* --- 仪表盘 (Dashboard) --- */
+        .main-header {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            margin-bottom: 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.5rem;
         }
-        .card-title {
-            color: #555;
-            font-size: 1rem;
-            font-weight: 700;
-        }
-        .card-badge {
-            font-size: 0.75rem;
-            background: #f0f2f5;
-            color: #666;
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .card-value {
-            color: #2c3e50;
-            font-size: 2rem;
-            font-weight: 800;
-            margin: 0.5rem 0;
-            line-height: 1.2;
-        }
-        .card-sub {
-            font-size: 0.9rem;
-            color: #888;
-        }
-        .explain-text {
-            font-size: 0.8rem;
-            color: #999;
-            margin-top: 2px;
-        }
-
-        /* 指标颜色 */
-        .up-text { color: #d93025; font-weight: bold; }
-        .down-text { color: #1e8e3e; font-weight: bold; }
-
-        /* 技术指标小卡片 */
-        .tech-card {
+        
+        /* 数据卡片 */
+        .data-card {
             background: white;
-            padding: 1rem;
-            border-radius: 10px;
-            border-left: 4px solid #ddd;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #f0f0f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
-        .tech-title { font-weight: bold; color: #333; font-size: 0.95rem; }
-        .tech-cn { font-size: 0.8rem; color: #888; margin-left: 5px; }
-        .tech-val { float: right; font-weight: bold; color: #444; }
-
+        .card-title { color: #888; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-value { color: #2c3e50; font-size: 1.8rem; font-weight: 700; margin: 5px 0; }
+        .up-text { color: #d93025; font-size: 0.9rem; font-weight: 500; }
+        .down-text { color: #1e8e3e; font-size: 0.9rem; font-weight: 500; }
+        
+        /* 按钮美化 */
+        div.stButton > button {
+            background: #1e3c72; /* 深蓝纯色背景 */
+            color: white !important;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        div.stButton > button:hover {
+            background: #2a5298;
+            box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
+        }
+        
+        /* 技术指标行 */
+        .tech-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+            font-size: 0.9rem;
+        }
+        .tech-label { color: #666; }
+        .tech-val { font-weight: 600; color: #333; }
+        
         /* AI 报告框 */
         .ai-box {
             background: #ffffff;
-            border-radius: 20px;
-            padding: 3rem;
+            border-radius: 16px;
+            padding: 2.5rem;
             border: 1px solid #eef0f5;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.06);
-            margin-top: 3rem;
-            position: relative;
-        }
-        .ai-box::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; width: 8px; height: 100%;
-            background: linear-gradient(180deg, #4facfe 0%, #00f2fe 100%);
-            border-top-left-radius: 20px;
-            border-bottom-left-radius: 20px;
-        }
-
-        /* 按钮 */
-        div.stButton > button {
-            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
-            color: white !important;
-            border: none;
-            padding: 0.7rem 1.5rem;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            margin-top: 2rem;
+            border-top: 4px solid #1e3c72;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -204,45 +218,82 @@ def run_app():
         elif trend == "down":
             trend_html = f"<span class='down-text'>▼ {sub_info}</span>"
         elif sub_info:
-            trend_html = f"<span style='color:#666'>{sub_info}</span>"
+            trend_html = f"<span style='color:#999; font-size:0.9rem;'>{sub_info}</span>"
             
         st.markdown(f"""
         <div class="data-card">
-            <div class="card-header">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="card-title">{title_en}</span>
-                <span class="card-badge">{title_cn}</span>
+                <span style="font-size:0.75rem; background:#f5f5f5; padding:2px 6px; border-radius:4px; color:#666;">{title_cn}</span>
             </div>
             <div class="card-value">{value}</div>
-            <div class="card-sub">{trend_html}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    def render_tech_row(label_en, label_cn, value, border_color="#ddd"):
-        """渲染技术指标行"""
-        st.markdown(f"""
-        <div class="tech-card" style="border-left-color: {border_color};">
-            <span class="tech-title">{label_en}</span>
-            <span class="tech-cn">{label_cn}</span>
-            <span class="tech-val">{value}</span>
+            <div>{trend_html}</div>
         </div>
         """, unsafe_allow_html=True)
 
     def show_landing_page():
+        """显示高级感首页"""
+        # 1. 顶部 Hero Section
         st.markdown("""
-        <div class="main-header" style="text-align: center;">
-            <h1>📊 DeepSeek 智能投研系统</h1>
-            <p style="opacity: 0.9; margin-top: 10px;">整合 Tushare 金融大数据 × DeepSeek V3 深度推理模型</p>
+        <div class="landing-header">
+            <h1>DeepSeek 智能投研系统</h1>
+            <p>融合 Tushare 金融大数据与 DeepSeek V3 深度推理模型<br>为您提供机构级的量化分析视角</p>
         </div>
         """, unsafe_allow_html=True)
-        
-        c1, c2, c3 = st.columns(3)
+
+        # 2. 引导操作区
+        c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("""
-            <div style="text-align:center; padding: 40px; background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
-                <h2 style="color:#333;">🚀 开始您的分析</h2>
-                <p style="color:#666;">请点击左上角 <b>></b> 展开侧边栏<br>输入股票代码（如 600519）即可生成报告</p>
+            <div style="text-align: center; margin-bottom: 4rem; padding: 20px; background: #fff; border-radius: 12px; border: 1px dashed #ddd;">
+                <h3 style="color: #333; margin-bottom: 10px;">🚀 开启分析之旅</h3>
+                <p style="color: #666; margin-bottom: 0;">请点击左上角 <b>></b> 展开侧边栏，输入股票代码（如 600519）即可生成报告。</p>
             </div>
             """, unsafe_allow_html=True)
+
+        # 3. 功能特性区 (Features)
+        st.markdown("<h3 style='text-align:center; margin-bottom:2rem; color:#333;'>核心能力概览</h3>", unsafe_allow_html=True)
+        
+        f1, f2, f3, f4 = st.columns(4, gap="medium")
+        
+        with f1:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <div class="feature-title">实时行情接入</div>
+                <div class="feature-desc">直连交易所数据源，毫秒级获取最新价格、成交量与盘口动态。</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with f2:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <div class="feature-title">AI 深度推理</div>
+                <div class="feature-desc">基于 DeepSeek V3 大模型，模拟资深分析师逻辑进行多维度拆解。</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with f3:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">量化估值模型</div>
+                <div class="feature-desc">自动计算 PE/PB 分位、波动率及技术指标，辅助价值判断。</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with f4:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">🌍</div>
+                <div class="feature-title">宏观情绪扫描</div>
+                <div class="feature-desc">结合大盘指数与资金流向，精准捕捉市场情绪与系统性风险。</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; color:#ccc; font-size:0.8rem;'>Powered by DeepSeek & Tushare Pro</div>", unsafe_allow_html=True)
 
     # ===================== 业务逻辑 =====================
 
@@ -299,15 +350,13 @@ def run_app():
         # 1. 顶部 Header
         st.markdown(f"""
         <div class="main-header">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <h1 style="margin:0;">{stock_name}</h1>
-                    <p style="margin:5px 0 0 0; opacity:0.8;">股票代码: {stock_code}</p>
-                </div>
-                <div style="text-align:right;">
-                    <h2 style="margin:0;">DeepSeek 深度分析</h2>
-                    <p style="margin:5px 0 0 0; opacity:0.8;">{datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-                </div>
+            <div>
+                <h1 style="margin:0; font-size:1.8rem; color:#1e3c72;">{stock_name}</h1>
+                <div style="color:#888; font-size:0.9rem; margin-top:4px;">股票代码: {stock_code}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-weight:bold; color:#333;">DeepSeek 量化分析</div>
+                <div style="color:#999; font-size:0.8rem;">{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -324,9 +373,9 @@ def run_app():
             status.update(label="✅ 数据获取完成", state="complete")
             time.sleep(0.5)
 
-        # 2. 核心指标区 (增加间距 gap="large")
+        # 2. 核心指标区
         st.markdown("### 📈 核心概览")
-        c1, c2, c3, c4 = st.columns(4, gap="large") # <--- 关键修改：增加列间距
+        c1, c2, c3, c4 = st.columns(4, gap="large")
         
         pchg = daily_data.get('涨跌幅', '0%')
         trend = "neutral"
@@ -338,64 +387,74 @@ def run_app():
         with c3: render_data_card("PE (TTM)", "滚动市盈率", fund_data.get('PE(TTM)'), f"PB (市净率): {fund_data.get('PB')}")
         with c4: render_data_card("Volatility", "年化波动率", daily_data.get('波动率'), "20日标准差")
 
-        st.markdown("<br><br>", unsafe_allow_html=True) # 增加垂直间距
+        st.markdown("<br>", unsafe_allow_html=True)
 
         # 3. 详细指标面板
         col_tech, col_market = st.columns([2, 1], gap="large")
         
         with col_tech:
             st.markdown("### 🛠 技术指标监控")
-            st.markdown("<div style='color:#666; font-size:0.9rem; margin-bottom:15px;'>结合均线趋势与震荡指标的综合技术形态分析</div>", unsafe_allow_html=True)
-            
-            # 使用3列布局，让卡片不那么挤
-            t1, t2, t3 = st.columns(3, gap="medium")
-            with t1:
-                render_tech_row("MA5", "5日短期均线", daily_data.get('5日均线'), "#4facfe")
-                render_tech_row("MA10", "10日均线", daily_data.get('10日均线'), "#4facfe")
-                render_tech_row("MA20", "20日生命线", daily_data.get('20日均线'), "#00f2fe")
-            with t2:
-                render_tech_row("MACD", "平滑异同移动平均", daily_data.get('MACD'), "#a18cd1")
-                render_tech_row("RSI", "相对强弱指标(14)", daily_data.get('RSI'), "#fbc2eb")
-                render_tech_row("Trend", "短期趋势", "多头" if trend=="up" else "空头", "#ff9a9e")
-            with t3:
-                render_tech_row("BOLL UP", "布林带上轨(压力)", daily_data.get('布林上轨'), "#fa709a")
-                render_tech_row("BOLL MID", "布林带中轨", daily_data.get('布林中轨'), "#fee140")
-                render_tech_row("BOLL LOW", "布林带下轨(支撑)", daily_data.get('布林下轨'), "#fa709a")
+            st.markdown("""
+            <div style="background:white; padding:20px; border-radius:12px; border:1px solid #f0f0f0; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                    <div>
+                        <div style="color:#1e3c72; font-weight:bold; margin-bottom:10px; border-bottom:2px solid #f0f0f0; padding-bottom:5px;">均线系统</div>
+                        <div class="tech-row"><span class="tech-label">MA5 (短期)</span> <span class="tech-val">{0}</span></div>
+                        <div class="tech-row"><span class="tech-label">MA10 (支撑)</span> <span class="tech-val">{1}</span></div>
+                        <div class="tech-row"><span class="tech-label">MA20 (趋势)</span> <span class="tech-val">{2}</span></div>
+                    </div>
+                    <div>
+                        <div style="color:#764ba2; font-weight:bold; margin-bottom:10px; border-bottom:2px solid #f0f0f0; padding-bottom:5px;">震荡指标</div>
+                        <div class="tech-row"><span class="tech-label">MACD</span> <span class="tech-val">{3}</span></div>
+                        <div class="tech-row"><span class="tech-label">RSI (强弱)</span> <span class="tech-val">{4}</span></div>
+                        <div class="tech-row"><span class="tech-label">趋势信号</span> <span class="tech-val">{5}</span></div>
+                    </div>
+                    <div>
+                        <div style="color:#d93025; font-weight:bold; margin-bottom:10px; border-bottom:2px solid #f0f0f0; padding-bottom:5px;">布林通道</div>
+                        <div class="tech-row"><span class="tech-label">上轨 (压力)</span> <span class="tech-val">{6}</span></div>
+                        <div class="tech-row"><span class="tech-label">中轨 (均价)</span> <span class="tech-val">{7}</span></div>
+                        <div class="tech-row"><span class="tech-label">下轨 (支撑)</span> <span class="tech-val">{8}</span></div>
+                    </div>
+                </div>
+            </div>
+            """.format(
+                daily_data.get('5日均线'), daily_data.get('10日均线'), daily_data.get('20日均线'),
+                daily_data.get('MACD'), daily_data.get('RSI'), "多头" if trend=="up" else "空头",
+                daily_data.get('布林上轨'), daily_data.get('布林中轨'), daily_data.get('布林下轨')
+            ), unsafe_allow_html=True)
 
         with col_market:
             st.markdown("### 🌍 市场罗盘")
-            st.markdown("<div style='color:#666; font-size:0.9rem; margin-bottom:15px;'>宏观环境与基本面扫描</div>", unsafe_allow_html=True)
-            
             # 市场情绪大卡片
             sent = mkt_data.get('市场情绪')
-            bg_color = "#f9f9f9"
+            bg_color = "#f8f9fa"
             text_color = "#333"
             if sent == "乐观": 
-                bg_color = "linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)"
-                text_color = "#006400"
+                bg_color = "linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)" # 清新绿
+                text_color = "#00695c"
             elif sent == "悲观": 
-                bg_color = "linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)"
-                text_color = "#8b0000"
+                bg_color = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)" # 柔和红
+                text_color = "#c62828"
             
             st.markdown(f"""
-            <div style="background:{bg_color}; padding:30px 20px; border-radius:16px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.05); color:{text_color};">
-                <h2 style="margin:0; font-size:2rem;">{sent}</h2>
-                <p style="margin:5px 0 0 0; opacity:0.8; font-weight:bold;">当前市场情绪</p>
-                <div style="margin-top:20px; font-size:1.1rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:10px;">
+            <div style="background:{bg_color}; padding:25px; border-radius:12px; text-align:center; color:{text_color}; border:1px solid rgba(0,0,0,0.05);">
+                <div style="font-size:0.9rem; opacity:0.8;">当前市场情绪</div>
+                <div style="font-size:2.2rem; font-weight:800; margin:5px 0;">{sent}</div>
+                <div style="font-size:1rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:10px; margin-top:10px;">
                     参考指数: <b>{mkt_data.get('市场指数涨跌幅')}</b>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
             st.markdown(f"""
-            <div style="margin-top:20px; padding:20px; background:white; border-radius:16px; border:1px solid #eee; box-shadow:0 2px 10px rgba(0,0,0,0.02);">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <span style="color:#888;">🏢 所属行业</span>
-                    <span style="font-weight:bold; color:#333;">{fund_data.get('所属行业')}</span>
+            <div style="margin-top:15px; padding:15px; background:white; border-radius:12px; border:1px solid #eee; font-size:0.9rem;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:#888;">所属行业</span>
+                    <span style="font-weight:600;">{fund_data.get('所属行业')}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between;">
-                    <span style="color:#888;">💰 总市值</span>
-                    <span style="font-weight:bold; color:#333;">{fund_data.get('总市值')}</span>
+                    <span style="color:#888;">总市值</span>
+                    <span style="font-weight:600;">{fund_data.get('总市值')}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -403,11 +462,11 @@ def run_app():
         # 4. AI 报告
         st.markdown(f"""
         <div class="ai-box">
-            <div style="display:flex; align-items:center; gap:15px; margin-bottom:2rem; border-bottom:1px solid #eee; padding-bottom:1.5rem;">
-                <span style="font-size: 2.5rem;">🤖</span>
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:2rem; padding-bottom:1.5rem; border-bottom:1px solid #eee;">
+                <div style="background:#e3f2fd; padding:10px; border-radius:50%; font-size:1.5rem;">🤖</div>
                 <div>
-                    <h2 style="margin:0; color:#2c3e50;">DeepSeek 深度研报</h2>
-                    <span style="font-size:1rem; color:#888;">基于 {predict_cycle} 的多因子量化推理模型 • 自动生成</span>
+                    <h3 style="margin:0; color:#1e3c72;">DeepSeek 深度研报</h3>
+                    <span style="font-size:0.9rem; color:#888;">基于 {predict_cycle} 的多因子量化推理模型</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
