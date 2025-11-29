@@ -366,8 +366,21 @@ def run_app():
             "最新价": daily_data.get('收盘价'), "涨跌幅": daily_data.get('涨跌幅'),
             "PE(TTM)": fund_data.get('PE(TTM)'), "风格": analysis_style
         }
-        if not st.session_state.history_data or st.session_state.history_data[0]["代码"] != stock_code:
+           # 判断标准：只有当 [代码] 和 [风格] 和 [周期] 完全一致，且时间极近(防止误触)时，才视为重复
+        should_save = True
+        if st.session_state.history_data:
+            last_record = st.session_state.history_data[0]
+            # 如果 代码、风格、周期 都一样，就不保存了（防止刷新页面重复添加）
+            if (last_record["代码"] == stock_code and 
+                last_record["风格"] == analysis_style and
+                last_record.get("AI预测周期") == predict_cycle):
+                should_save = False
+        
+        if should_save:
             st.session_state.history_data.insert(0, new_record)
+            # 保持最新的 50 条记录，防止无限增长
+            if len(st.session_state.history_data) > 50:
+                st.session_state.history_data.pop()
 
         # 2. 核心指标区
         st.markdown("### 📈 核心概览")
