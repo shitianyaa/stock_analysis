@@ -57,6 +57,10 @@ def check_password():
 # ===================== 3. 主程序逻辑 =====================
 
 def run_app():
+    # === 初始化 Session State (用于存储历史记录) ===
+    if 'history_data' not in st.session_state:
+        st.session_state.history_data = []
+
     # === CSS 深度美化 ===
     st.markdown("""
     <style>
@@ -167,10 +171,10 @@ def run_app():
         .up-text { color: #d93025; font-size: 0.9rem; font-weight: 500; }
         .down-text { color: #1e8e3e; font-size: 0.9rem; font-weight: 500; }
         
-        /* === 按钮样式修复 (针对文字看不清问题) === */
+        /* 按钮样式修复 */
         div.stButton > button {
             background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
-            color: #ffffff !important; /* 强制白色文字 */
+            color: #ffffff !important; 
             border: none;
             padding: 0.6rem 1.2rem;
             border-radius: 8px;
@@ -179,7 +183,6 @@ def run_app():
             transition: all 0.3s;
             box-shadow: 0 4px 6px rgba(30, 60, 114, 0.2);
         }
-        /* 强制内部 p 标签文字也为白色 (Streamlit有时会嵌套p标签) */
         div.stButton > button p {
             color: #ffffff !important; 
         }
@@ -239,7 +242,6 @@ def run_app():
 
     def show_landing_page():
         """显示高级感首页"""
-        # 1. 顶部 Hero Section
         st.markdown("""
         <div class="landing-header">
             <h1>DeepSeek 智能投研系统</h1>
@@ -247,7 +249,6 @@ def run_app():
         </div>
         """, unsafe_allow_html=True)
 
-        # 2. 引导操作区
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("""
@@ -257,46 +258,11 @@ def run_app():
             </div>
             """, unsafe_allow_html=True)
 
-        # 3. 功能特性区 (Features)
-        st.markdown("<h3 style='text-align:center; margin-bottom:2rem; color:#333;'>核心能力概览</h3>", unsafe_allow_html=True)
-        
         f1, f2, f3, f4 = st.columns(4, gap="medium")
-        
-        with f1:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">📡</div>
-                <div class="feature-title">实时行情接入</div>
-                <div class="feature-desc">直连交易所数据源，毫秒级获取最新价格、成交量与盘口动态。</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with f2:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">🧠</div>
-                <div class="feature-title">AI 深度推理</div>
-                <div class="feature-desc">基于 DeepSeek V3 大模型，模拟资深分析师逻辑进行多维度拆解。</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with f3:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <div class="feature-title">量化估值模型</div>
-                <div class="feature-desc">自动计算 PE/PB 分位、波动率及技术指标，辅助价值判断。</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with f4:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">🌍</div>
-                <div class="feature-title">宏观情绪扫描</div>
-                <div class="feature-desc">结合大盘指数与资金流向，精准捕捉市场情绪与系统性风险。</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with f1: st.markdown("""<div class="feature-card"><div class="feature-icon">📡</div><div class="feature-title">实时行情接入</div><div class="feature-desc">直连交易所数据源，毫秒级获取最新价格、成交量与盘口动态。</div></div>""", unsafe_allow_html=True)
+        with f2: st.markdown("""<div class="feature-card"><div class="feature-icon">🧠</div><div class="feature-title">AI 深度推理</div><div class="feature-desc">基于 DeepSeek V3 大模型，模拟资深分析师逻辑进行多维度拆解。</div></div>""", unsafe_allow_html=True)
+        with f3: st.markdown("""<div class="feature-card"><div class="feature-icon">📊</div><div class="feature-title">量化估值模型</div><div class="feature-desc">自动计算 PE/PB 分位、波动率及技术指标，辅助价值判断。</div></div>""", unsafe_allow_html=True)
+        with f4: st.markdown("""<div class="feature-card"><div class="feature-icon">🌍</div><div class="feature-title">宏观情绪扫描</div><div class="feature-desc">结合大盘指数与资金流向，精准捕捉市场情绪与系统性风险。</div></div>""", unsafe_allow_html=True)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("<div style='text-align:center; color:#ccc; font-size:0.8rem;'>Powered by DeepSeek & Tushare Pro</div>", unsafe_allow_html=True)
@@ -325,12 +291,13 @@ def run_app():
                 if is_valid:
                     stock_code = result
                     st.session_state.target_code = code_input
-                    if st.session_state.stock_name == "":
-                        stock_name = get_stock_name_by_code(stock_code)
-                        st.session_state.stock_name = stock_name
-                    else: stock_name = st.session_state.stock_name
+                    with st.spinner("验证中..."):
+                        fetched_name = get_stock_name_by_code(stock_code)
+                        st.session_state.stock_name = fetched_name
+                        stock_name = fetched_name
                     st.success(f"已锁定: {stock_name}")
-                else: st.error(result)
+                else:
+                    st.error(result)
         else:
             keyword = st.text_input("名称", placeholder="如: 腾讯控股")
             if keyword:
@@ -351,7 +318,9 @@ def run_app():
 
     # --- 主视图 ---
     if not analyze_btn or not stock_code:
-        show_landing_page()
+        # 如果有历史数据，展示历史数据，否则展示首页
+        if not st.session_state.history_data:
+            show_landing_page()
     else:
         # 1. 顶部 Header
         st.markdown(f"""
@@ -378,6 +347,24 @@ def run_app():
             mkt_data = get_market_environment_data(stock_code)
             status.update(label="✅ 数据获取完成", state="complete")
             time.sleep(0.5)
+
+        # === 核心逻辑：保存历史记录 ===
+        # 创建一条记录
+        new_record = {
+            "分析时间": datetime.now().strftime('%m-%d %H:%M'),
+            "代码": stock_code,
+            "名称": stock_name,
+            "最新价": daily_data.get('收盘价'),
+            "涨跌幅": daily_data.get('涨跌幅'),
+            "换手率": daily_data.get('换手率'),
+            "PE(TTM)": fund_data.get('PE(TTM)'),
+            "市场情绪": mkt_data.get('市场情绪'),
+            "AI预测周期": predict_cycle
+        }
+        
+        # 避免重复添加（简单的去重逻辑：如果最后一条记录和当前一样，就不加）
+        if not st.session_state.history_data or st.session_state.history_data[0]["代码"] != stock_code:
+            st.session_state.history_data.insert(0, new_record) # 插入到最前面
 
         # 2. 核心指标区
         st.markdown("### 📈 核心概览")
@@ -431,15 +418,14 @@ def run_app():
 
         with col_market:
             st.markdown("### 🌍 市场罗盘")
-            # 市场情绪大卡片
             sent = mkt_data.get('市场情绪')
             bg_color = "#f8f9fa"
             text_color = "#333"
             if sent == "乐观": 
-                bg_color = "linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)" # 清新绿
+                bg_color = "linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)" 
                 text_color = "#00695c"
             elif sent == "悲观": 
-                bg_color = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)" # 柔和红
+                bg_color = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)" 
                 text_color = "#c62828"
             
             st.markdown(f"""
@@ -491,6 +477,41 @@ def run_app():
             </div>
             """, unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ===================== 历史记录与对比区 (新增) =====================
+    if st.session_state.history_data:
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        
+        with st.expander("📜 历史分析记录与对比 (点击展开)", expanded=True):
+            # 将列表转换为 DataFrame
+            df_history = pd.DataFrame(st.session_state.history_data)
+            
+            # 显示数据表
+            st.dataframe(
+                df_history,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "涨跌幅": st.column_config.TextColumn("涨跌幅", help="当日涨跌幅"),
+                    "PE(TTM)": st.column_config.TextColumn("PE", help="滚动市盈率"),
+                }
+            )
+            
+            # 操作区
+            col_d1, col_d2 = st.columns([1, 5])
+            with col_d1:
+                # 转换 CSV
+                csv = df_history.to_csv(index=False).encode('utf-8-sig') # 使用 utf-8-sig 解决 Excel 中文乱码
+                st.download_button(
+                    label="📥 下载数据 (CSV)",
+                    data=csv,
+                    file_name=f"deepseek_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            with col_d2:
+                if st.button("🗑️ 清空记录"):
+                    st.session_state.history_data = []
+                    st.rerun()
 
 # ===================== 4. 程序入口 =====================
 if __name__ == "__main__":
