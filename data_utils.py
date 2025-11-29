@@ -62,12 +62,69 @@ def search_stocks(keyword):
         return res[:10]
     except: return []
 
-# ===================== 核心指标计算 =====================
+# ===================== 核心：疯狗模式获取换手率 =====================
+
+def get_real_turnover_rate(pro, ts_code):
+    """
+    不惜一切代价获取换手率
+    1. A股: daily -> daily_basic -> 每日指标
+    2. 港股: hk_indicator (最近30天找非空)
+    """
+    try:
+        # === 港股逻辑 ===
+        if ts_code.endswith('.HK'):
+            # 策略：查最近30天，倒序，找到第一个非空的 turnover_rate
+            end = datetime.now().strftime('%Y%m%d')
+            start = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+            
+            try:
+                df = pro.hk_indicator(ts_code=ts_code, start_date=start, end_date=end, fields='trade_date,turnover_rate')
+                if not df.empty:
+                    # 过滤掉 None/NaN
+                    df = df[df['turnover_rate'].notna()]
+                    if not df.empty:
+                        val = df.sort_values('trade_date', ascending=False).iloc[0]['turnover_rate']
+                        return f"{float(val):.2f}%"
+            except: pass
+            return "N/A (无权限或数据)"
+
+        # === A股逻辑 ===
+        else:
+            today = datetime.now().strftime('%Y%m%d')
+            start_week = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
+            
+            # 尝试 1: daily 接口 (通常有)
+            try:
+                df = pro.daily(ts_code=ts_code, start_date=start_week, end_date=today)
+                if not df.empty:
+                    latest = df.sort_values('trade_date', ascending=False).iloc[0]
+                    if pd.notna(latest.get('turnover_rate')):
+                        return f"{latest['turnover_rate']:.2f}%"
+            except: pass
+            
+            # 尝试 2: daily_basic (如果 daily 没有，这里肯定有)
+            try:
+                df = pro.daily_basic(ts_code=ts_code, start_date=start_week, end_date=today, fields='trade_date,turnover_rate,turnover_rate_f')
+                if not df.empty:
+                    latest = df.sort_values('trade_date', ascending=False).iloc[0]
+                    # 优先用 turnover_rate，没有则用 turnover_rate_f (自由流通换手)
+                    if pd.notna(latest.get('turnover_rate')):
+                        return f"{latest['turnover_rate']:.2f}%"
+                    if pd.notna(latest.get('turnover_rate_f')):
+                        return f"{latest['turnover_rate_f']:.2f}% (自由)"
+            except: pass
+            
+            return "N/A"
+            
+    except Exception as e:
+        print(f"换手率获取出错: {e}")
+        return "N/A"
+
+# ===================== 技术指标计算 =====================
 
 def get_enhanced_technical_indicators(df):
     try:
         if df.empty: return df
-        # 按日期升序排列，方便计算指标
         df = df.sort_values('trade_date').reset_index(drop=True)
         close = df['close']
         
@@ -96,7 +153,7 @@ def get_enhanced_technical_indicators(df):
         return df
     except: return df
 
-# ===================== 行情获取 (修复换手率) =====================
+# ===================== 数据获取主入口 =====================
 
 def get_clean_market_data(ts_code, days=90):
     pro = get_tushare_pro()
@@ -107,55 +164,29 @@ def get_clean_market_data(ts_code, days=90):
         start = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
         
         df = pd.DataFrame()
-        turnover_val = None # 专门存储换手率数值
         
-        # === 1. 获取基础行情 ===
+        # 1. 单独优先获取换手率 (防止被后续逻辑干扰)
+        turnover_str = get_real_turnover_rate(pro, ts_code)
+        
+        # 2. 获取K线行情
         if ts_code.endswith('.HK'):
-            # 港股
             try:
                 df = pro.hk_daily(ts_code=ts_code, start_date=start, end_date=end)
-                
-                # 港股换手率必须去 hk_indicator 拿
-                # 往前查30天，直到找到有数据为止
-                ind_start = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
-                df_ind = pro.hk_indicator(ts_code=ts_code, start_date=ind_start)
-                
-                if not df_ind.empty:
-                    # 倒序，取第一条非空的 turnover_rate
-                    df_ind = df_ind.sort_values('trade_date', ascending=False)
-                    for _, row in df_ind.iterrows():
-                        if pd.notna(row.get('turnover_rate')):
-                            turnover_val = row['turnover_rate']
-                            break
             except Exception as e: return {"错误": f"港股接口错: {e}"}
         else:
-            # A股
             df = pro.daily(ts_code=ts_code, start_date=start, end_date=end)
-            
-            # A股换手率就在 daily 里，直接拿最新的一条（Tushare默认第一条就是最新的）
-            if not df.empty:
-                first_row = df.iloc[0]
-                if pd.notna(first_row.get('turnover_rate')):
-                    turnover_val = first_row['turnover_rate']
         
         if df.empty: return {"错误": "暂无行情数据"}
         
-        # === 2. 格式化换手率字符串 ===
-        if turnover_val is not None:
-            turnover_str = f"{float(turnover_val):.2f}%"
-        else:
-            turnover_str = "N/A"
-
-        # === 3. 计算其他指标 ===
-        # 注意：这里会重排df顺序，所以我们上面已经把换手率提出来了
+        # 3. 计算指标
         df = get_enhanced_technical_indicators(df)
-        latest = df.iloc[-1] # 这是时间最近的一行
+        latest = df.iloc[-1]
 
         return {
             "收盘价": f"{latest['close']}",
             "涨跌幅": f"{latest['pct_chg']:.2f}%",
             "成交量": f"{latest['vol']/10000:.2f}万手",
-            "换手率": turnover_str, # 使用我们单独提取并格式化的值
+            "换手率": turnover_str, # 使用单独获取的值
             "5日均线": f"{latest['ma5']:.2f}" if pd.notna(latest['ma5']) else "-",
             "10日均线": f"{latest['ma10']:.2f}" if pd.notna(latest['ma10']) else "-",
             "20日均线": f"{latest['ma20']:.2f}" if pd.notna(latest['ma20']) else "-",
@@ -167,8 +198,6 @@ def get_clean_market_data(ts_code, days=90):
             "波动率": f"{latest['volatility']:.4f}" if pd.notna(latest['volatility']) else "-",
         }
     except Exception as e: return {"错误": str(e)}
-
-# ===================== 基本面 & 市场环境 =====================
 
 def get_clean_fundamental_data(ts_code, daily_data=None):
     pro = get_tushare_pro()
@@ -184,7 +213,6 @@ def get_clean_fundamental_data(ts_code, daily_data=None):
                 s_date = (datetime.now() - timedelta(days=60)).strftime('%Y%m%d')
                 df_i = pro.hk_indicator(ts_code=ts_code, start_date=s_date)
                 if not df_i.empty:
-                    # 找最近一条有效数据
                     df_i = df_i.sort_values('trade_date', ascending=False)
                     for _, r in df_i.iterrows():
                         if pd.notna(r.get('pe_ttm')) or pd.notna(r.get('mkt_cap')):
@@ -215,7 +243,7 @@ def get_market_environment_data(ts_code):
         end = datetime.now().strftime('%Y%m%d')
         start = (datetime.now() - timedelta(days=10)).strftime('%Y%m%d')
         
-        # 强制兜底：先拿沪深300
+        # 1. 优先拿沪深300
         try:
             df = pro.index_daily(ts_code='399300.SZ', start_date=start, end_date=end)
             if not df.empty:
@@ -223,7 +251,7 @@ def get_market_environment_data(ts_code):
                 name = "沪深300"
         except: pass
 
-        # 港股尝试拿恒指
+        # 2. 港股尝试拿恒指
         if ts_code.endswith('.HK'):
             try:
                 df = pro.index_daily(ts_code='HSI', start_date=start, end_date=end)
@@ -232,9 +260,10 @@ def get_market_environment_data(ts_code):
                     name = "恒生指数"
             except: pass
         
-        val = float(change.replace('%',''))
-        if val > 1: sentiment = "乐观"
-        elif val < -1: sentiment = "悲观"
+        try:
+            val = float(change.replace('%',''))
+            if val > 1: sentiment = "乐观"
+            elif val < -1: sentiment = "悲观"
+        except: pass
     except: pass
-    
     return {"市场指数涨跌幅": f"{change} ({name})", "市场情绪": sentiment}
