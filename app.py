@@ -534,7 +534,7 @@ def run_app():
             display_cols = ["分析时间", "代码", "名称", "最新价", "涨跌幅", "PE(TTM)", "市场情绪", "风格"]
             st.dataframe(
                 df_hist[display_cols], # 只显示摘要列
-                use_container_width=True, 
+                width="stretch", 
                 hide_index=True,
                 column_config={
                     "涨跌幅": st.column_config.TextColumn("涨跌幅", help="当日涨跌幅"),
